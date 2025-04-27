@@ -3,7 +3,7 @@ const axios = require("axios");
 
 // TODO: Replace this with your valid API key from Google AI Studio
 // Get your API key from: https://makersuite.google.com/app/apikey
-const API_KEY = "";
+const API_KEY = "AIzaSyCwZPLUliJQXuZrrFW-0t0kYJCzcnYteLk";
 
 // Load image as base64
 const imagePath = "maladie_.jpeg";
