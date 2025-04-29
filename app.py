@@ -14,6 +14,16 @@ from reportlab.lib import colors
 from docx import Document
 from pptx import Presentation
 from pptx.util import Inches, Pt
+import uuid
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+from reportlab.pdfgen.canvas import Canvas
+import qrcode
+from google_auth import handle_google_signin
+import time
 
 # Set page config
 st.set_page_config(
@@ -76,57 +86,57 @@ st.markdown("""
     <style>
     /* Main app styling */
     .main {
-        background-color: #f8f9fa;
+        background-color: #f8fafc;
         padding: 2rem;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Inter', 'Segoe UI', sans-serif;
     }
     
     /* Header styling */
-    h1, h2, h3 {
-        color: #2c3e50;
+    h1, h2, h3, h4 {
+        color: #1e3a8a;
         font-weight: 600;
+        font-family: 'Inter', sans-serif;
     }
     
     h1 {
-        font-size: 2.5rem;
+        font-size: 2.2rem;
         margin-bottom: 1.5rem;
-        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #1e3a8a;
         padding: 10px 0;
+        border-bottom: 2px solid #e2e8f0;
     }
     
     /* Button styling */
     .stButton>button {
         width: 100%;
-        height: 3em;
-        background: linear-gradient(90deg, #36D1DC 0%, #5B86E5 100%);
+        height: 2.8em;
+        background-color: #2563eb;
         color: white;
         border: none;
-        border-radius: 8px;
+        border-radius: 6px;
         font-weight: 500;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
     }
     
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
-        background: linear-gradient(90deg, #5B86E5 0%, #36D1DC 100%);
+        background-color: #1d4ed8;
+        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
     }
     
     /* Form styling */
-    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stTextArea>div>div>textarea {
         border-radius: 6px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #e2e8f0;
         padding: 12px;
         box-shadow: none !important;
-        font-size: 16px;
+        font-size: 14px;
+        background-color: white;
     }
     
-    .stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus {
-        border: 1px solid #5B86E5;
-        box-shadow: 0 0 0 1px #5B86E5 !important;
+    .stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus, .stTextArea>div>div>textarea:focus {
+        border: 1px solid #2563eb;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
     }
     
     /* Authentication container */
@@ -135,88 +145,94 @@ st.markdown("""
         margin: 2rem auto;
         padding: 2rem;
         background-color: white;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-        border: 1px solid #f0f0f0;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
     }
     
     /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
     }
     
     .stTabs [data-baseweb="tab"] {
-        padding: 10px 24px;
-        background-color: #f8f9fa;
-        border-radius: 8px 8px 0 0;
-        border: none;
-        color: #4a4a4a;
+        padding: 10px 20px;
+        background-color: #f8fafc;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        color: #4b5563;
         font-weight: 500;
+        font-size: 14px;
     }
     
     .stTabs [aria-selected="true"] {
-        background-color: #5B86E5 !important;
+        background-color: #2563eb !important;
         color: white !important;
+        border-color: #2563eb !important;
     }
     
     /* File uploader */
     .uploadedFile {
-        border: 1px dashed #5B86E5;
-        border-radius: 10px;
+        border: 2px dashed #2563eb;
+        border-radius: 8px;
         padding: 20px;
         text-align: center;
-        background-color: #f7fafc;
+        background-color: #f8fafc;
     }
     
     /* Card styling for report */
     .report-card {
         background-color: white;
         padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         margin: 1.5rem 0;
-        border-left: 5px solid #5B86E5;
+        border-left: 4px solid #2563eb;
     }
     
     /* Success/error messages */
     .success-message {
         padding: 1rem;
-        background-color: #d4edda;
-        color: #155724;
+        background-color: #dcfce7;
+        color: #166534;
         border-radius: 6px;
         margin: 1rem 0;
+        border: 1px solid #bbf7d0;
     }
     
     .error-message {
         padding: 1rem;
-        background-color: #f8d7da;
-        color: #721c24;
+        background-color: #fee2e2;
+        color: #991b1b;
         border-radius: 6px;
         margin: 1rem 0;
+        border: 1px solid #fecaca;
     }
     
     /* Language selector */
     .language-selector {
         background-color: white;
-        padding: 1rem;
+        padding: 1.5rem;
         border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
     }
     
     /* Footer */
     .footer {
         margin-top: 3rem;
         padding-top: 1.5rem;
-        border-top: 1px solid #e0e0e0;
+        border-top: 1px solid #e2e8f0;
         text-align: center;
-        color: #6c757d;
+        color: #4b5563;
+        font-size: 14px;
     }
     
     /* Download button */
     .download-btn {
-        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+        background-color: #2563eb;
         margin-top: 1rem;
     }
     
@@ -226,10 +242,11 @@ st.markdown("""
         justify-content: space-between;
         align-items: center;
         background-color: white;
-        padding: 1rem;
+        padding: 1.5rem;
         border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
     }
     
     /* Patient info form */
@@ -237,16 +254,48 @@ st.markdown("""
         background-color: white;
         padding: 1.5rem;
         border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
     }
     
     /* Download options */
     .download-options {
         display: flex;
-        gap: 10px;
+        gap: 12px;
         flex-wrap: wrap;
-        margin-top: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    /* Medical icons */
+    .medical-icon {
+        color: #2563eb;
+        margin-right: 8px;
+    }
+    
+    /* Report header */
+    .report-header {
+        background-color: #f8fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* Form labels */
+    .stTextInput>label, .stSelectbox>label, .stTextArea>label {
+        font-weight: 500;
+        color: #1e3a8a;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Section headers */
+    .section-header {
+        color: #1e3a8a;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e2e8f0;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -255,12 +304,14 @@ def login(username, password):
     user = verify_user(username, password)
     if user:
         st.session_state.authenticated = True
-        st.session_state.username = username
+        st.session_state.user_email = username  # Store email
+        st.session_state.username = user.get('username', username)  # Store actual username
         return True
     return False
 
 def logout():
     st.session_state.authenticated = False
+    st.session_state.user_email = None
     st.session_state.username = None
     st.session_state.analysis_result = None
     st.session_state.patient_info = None
@@ -271,60 +322,88 @@ def generate_pdf(analysis, patient_info, image_bytes=None):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     
-    # Custom styles
+    # Generate a simple report ID
+    report_id = f"MIR-{uuid.uuid4().hex[:8].upper()}"
+    
+    # Custom styles for medical report
     title_style = ParagraphStyle(
         'Title',
         parent=styles['Heading1'],
-        fontSize=16,
-        textColor=colors.darkblue,
-        spaceAfter=12,
-        alignment=1  # Center alignment
+        fontSize=18,
+        textColor=colors.HexColor('#1e3a8a'),
+        spaceAfter=20,
+        alignment=1,  # Center alignment
+        fontName='Helvetica-Bold'
     )
     
     header_style = ParagraphStyle(
         'Header',
         parent=styles['Heading2'],
         fontSize=14,
-        textColor=colors.darkblue,
-        spaceAfter=10
+        textColor=colors.HexColor('#1e3a8a'),
+        spaceAfter=12,
+        fontName='Helvetica-Bold'
+    )
+    
+    subheader_style = ParagraphStyle(
+        'Subheader',
+        parent=styles['Heading3'],
+        fontSize=12,
+        textColor=colors.HexColor('#4b5563'),
+        spaceAfter=8,
+        fontName='Helvetica-Bold'
     )
     
     normal_style = ParagraphStyle(
         'Normal',
         parent=styles['Normal'],
         fontSize=11,
-        spaceAfter=8
+        spaceAfter=8,
+        fontName='Helvetica',
+        leading=14
     )
     
     # Build the PDF content
     story = []
     
-    # Title
-    title = Paragraph("MEDICAL ANALYSIS REPORT", title_style)
-    story.append(title)
-    story.append(Spacer(1, 12))
+    # Header with report info
+    header_text = """
+    <b>MEDICAL IMAGING ANALYSIS REPORT</b><br/>
+    <font size="10" color="#4b5563">Generated by Medical Report Generator</font>
+    """
+    header = Paragraph(header_text, title_style)
+    story.append(header)
+    story.append(Spacer(1, 20))
     
-    # Date
+    # Report metadata
     date_str = datetime.now().strftime("%Y-%m-%d at %H:%M")
-    date_paragraph = Paragraph(f"Report Date: {date_str}", normal_style)
-    story.append(date_paragraph)
-    story.append(Spacer(1, 12))
+    metadata = f"""
+    <b>Report ID:</b> {report_id}<br/>
+    <b>Date Generated:</b> {date_str}<br/>
+    <b>Report Type:</b> Medical Imaging Analysis
+    """
+    story.append(Paragraph(metadata, subheader_style))
+    story.append(Spacer(1, 20))
     
     # Patient Information
     story.append(Paragraph("PATIENT INFORMATION", header_style))
-    story.append(Paragraph(f"Patient Name: {patient_info['name']}", normal_style))
-    story.append(Paragraph(f"Patient ID: {patient_info['id']}", normal_style))
-    story.append(Paragraph(f"Indications: {patient_info['indications']}", normal_style))
-    story.append(Spacer(1, 12))
+    patient_info_text = f"""
+    <b>Name:</b> {patient_info.get('name', 'Not Provided')}<br/>
+    <b>Patient ID:</b> {patient_info.get('id', 'Not Provided')}<br/>
+    <b>Age:</b> {patient_info.get('age', 'Not Provided')}<br/>
+    <b>Sex:</b> {patient_info.get('sex', 'Not Provided')}
+    """
+    story.append(Paragraph(patient_info_text, normal_style))
+    story.append(Spacer(1, 20))
     
     # Image if available
     if image_bytes:
         try:
             img_stream = io.BytesIO(image_bytes)
-            img = RLImage(img_stream, width=300, height=200)
+            img = RLImage(img_stream, width=400, height=300)
             story.append(Paragraph("MEDICAL IMAGE", header_style))
             story.append(img)
-            story.append(Spacer(1, 12))
+            story.append(Spacer(1, 20))
         except:
             story.append(Paragraph("(Could not embed image)", normal_style))
     
@@ -334,13 +413,49 @@ def generate_pdf(analysis, patient_info, image_bytes=None):
     for para in analysis_paragraphs:
         if para.strip():
             story.append(Paragraph(para, normal_style))
-            story.append(Spacer(1, 6))
+            story.append(Spacer(1, 8))
     
-    # Disclaimer
+    # Add QR code for verification
     story.append(Spacer(1, 20))
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(f"REPORT-VERIFY:{report_id}")
+        qr.make(fit=True)
+        
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        img_bytes = io.BytesIO()
+        qr_img.save(img_bytes, format='PNG')
+        img_bytes.seek(0)
+        
+        qr_image = RLImage(img_bytes, width=1.5*inch, height=1.5*inch)
+        story.append(qr_image)
+        story.append(Paragraph("Scan to verify report authenticity", 
+                            ParagraphStyle(
+                                'Caption',
+                                parent=normal_style,
+                                fontSize=9,
+                                textColor=colors.HexColor('#6b7280'),
+                                alignment=1
+                            )))
+    except:
+        story.append(Paragraph("(Verification QR code could not be generated)", normal_style))
+    
+    # Footer with disclaimer
+    story.append(Spacer(1, 30))
     disclaimer = Paragraph(
         "This report is generated by artificial intelligence and should be reviewed by a qualified healthcare professional. It does not constitute professional medical advice.",
-        ParagraphStyle('Disclaimer', parent=normal_style, fontSize=9, textColor=colors.grey)
+        ParagraphStyle(
+            'Disclaimer',
+            parent=normal_style,
+            fontSize=9,
+            textColor=colors.HexColor('#6b7280'),
+            alignment=1
+        )
     )
     story.append(disclaimer)
     
@@ -363,7 +478,8 @@ def generate_docx(analysis, patient_info, image_bytes=None):
     doc.add_heading('PATIENT INFORMATION', level=1)
     doc.add_paragraph(f"Patient Name: {patient_info['name']}")
     doc.add_paragraph(f"Patient ID: {patient_info['id']}")
-    doc.add_paragraph(f"Indications: {patient_info['indications']}")
+    doc.add_paragraph(f"Age: {patient_info['age']}")
+    doc.add_paragraph(f"Sex: {patient_info['sex']}")
     
     # Image if available
     if image_bytes:
@@ -418,7 +534,10 @@ def generate_pptx(analysis, patient_info, image_bytes=None):
     p.text = f"Patient ID: {patient_info['id']}"
     
     p = tf.add_paragraph()
-    p.text = f"Indications: {patient_info['indications']}"
+    p.text = f"Age: {patient_info['age']}"
+    
+    p = tf.add_paragraph()
+    p.text = f"Sex: {patient_info['sex']}"
     
     # Image slide if available
     if image_bytes:
@@ -484,25 +603,83 @@ def generate_pptx(analysis, patient_info, image_bytes=None):
 
 # Authentication UI
 if not st.session_state.authenticated:
-    # Create a centered container with a medical logo
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.markdown("""
             <div style='text-align: center; padding: 20px;'>
-                <h1>🏥 Medical Report Generator</h1>
-                <p style='font-size: 18px; color: #6c757d; margin-bottom: 30px;'>
-                    Professional AI-powered analysis for medical imaging
+                <h1 style='color: #1e3a8a; font-size: 2.5rem; margin-bottom: 1rem;'>Medical Report Generator</h1>
+                <p style='font-size: 16px; color: #4b5563; margin-bottom: 30px;'>
+                    Professional AI-powered medical imaging analysis
                 </p>
             </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<div class='auth-container'>", unsafe_allow_html=True)
     
-    # Create tabs for Login and Sign Up
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
     
     with tab1:
-        st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>Welcome Back</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; margin-bottom: 20px; color: #1e3a8a;'>Welcome Back</h3>", unsafe_allow_html=True)
+        
+        # Add Google Sign-In button using Streamlit's native button
+        col1, col2, col3 = st.columns([1,3,1])
+        with col2:
+            # Add Google Sign-In container and script in the head
+            st.components.v1.html("""
+                <head>
+                    <script src="https://accounts.google.com/gsi/client" async defer></script>
+                </head>
+                <body>
+                    <div style="display: flex; justify-content: center; margin: 20px 0;">
+                        <div id="g_id_onload"
+                            data-client_id="1093379467339-kg7o7hbrnhn2rjmpr294k88fo5h7dpmh.apps.googleusercontent.com"
+                            data-callback="handleCredentialResponse"
+                            data-auto_prompt="false"
+                            data-itp_support="true"
+                            data-ux_mode="popup"
+                            data-scope="openid email profile">
+                        </div>
+                        <div class="g_id_signin"
+                            data-type="standard"
+                            data-size="large"
+                            data-theme="filled_black"
+                            data-text="signin_with"
+                            data-shape="rectangular"
+                            data-logo_alignment="left"
+                            data-width="300">
+                        </div>
+                    </div>
+                    <script>
+                        console.log("Current origin:", window.location.origin);
+                        
+                        function handleCredentialResponse(response) {
+                            console.log("Received credential response");
+                            if (response.credential) {
+                                console.log("Got credential token");
+                                
+                                // Create form for submission
+                                var form = document.createElement('form');
+                                form.method = 'POST';
+                                form.action = window.location.href;
+                                
+                                var input = document.createElement('input');
+                                input.type = 'hidden';
+                                input.name = 'google_token';
+                                input.value = response.credential;
+                                
+                                form.appendChild(input);
+                                document.body.appendChild(form);
+                                console.log("Submitting form...");
+                                form.submit();
+                            } else {
+                                console.error("No credential received in response:", response);
+                            }
+                        }
+                    </script>
+                </body>
+            """, height=70)
+        
+        st.markdown("<div style='text-align: center; margin: 10px 0;'>or</div>", unsafe_allow_html=True)
         
         with st.form("login_form"):
             username = st.text_input("Email", placeholder="Enter your email")
@@ -514,14 +691,14 @@ if not st.session_state.authenticated:
                 if login(username, password):
                     st.markdown("""
                         <div class='success-message'>
-                            Login successful! Redirecting...
+                            <span class='medical-icon'>✓</span> Login successful! Redirecting...
                         </div>
                     """, unsafe_allow_html=True)
                     st.rerun()
                 else:
                     st.markdown("""
                         <div class='error-message'>
-                            Invalid username or password
+                            <span class='medical-icon'>⚠️</span> Invalid username or password
                         </div>
                     """, unsafe_allow_html=True)
     
@@ -551,12 +728,20 @@ if not st.session_state.authenticated:
                     """, unsafe_allow_html=True)
                 else:
                     if create_user(new_username, new_password, email):
-                        st.markdown("""
-                            <div class='success-message'>
-                                Account created successfully! Please login.
-                            </div>
-                        """, unsafe_allow_html=True)
-                        st.rerun()
+                        # Automatically log in the user after successful signup
+                        if login(email, new_password):
+                            st.markdown("""
+                                <div class='success-message'>
+                                    Account created successfully! Redirecting...
+                                </div>
+                            """, unsafe_allow_html=True)
+                            st.rerun()
+                        else:
+                            st.markdown("""
+                                <div class='error-message'>
+                                    Account created but login failed. Please try logging in manually.
+                                </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.markdown("""
                             <div class='error-message'>
@@ -591,7 +776,10 @@ if not st.session_state.authenticated:
 
 # Main application (only shown after authentication)
 st.markdown("""
-    <h1>🏥 Medical Report Generator</h1>
+    <div class='report-header'>
+        <h1 style='margin-bottom: 0.5rem;'>Medical Report Generator</h1>
+        <p style='color: #4b5563; margin-bottom: 0;'>Professional medical imaging analysis and reporting</p>
+    </div>
 """, unsafe_allow_html=True)
 
 # User profile section
@@ -622,8 +810,8 @@ with col1:
     )
     st.session_state.language = selected_language
     
-    # API Key input
-    api_key = st.text_input("Enter your Google AI Studio API Key:", type="password")
+    # Remove API Key input and use the provided key
+    API_KEY = "AIzaSyBjVRQNCTl_HykJb0WCqvO_T7JI7FTkRmE"
     
     # Add logout button
     if st.button("Logout"):
@@ -634,16 +822,19 @@ with col1:
     
     # Patient information form
     st.markdown("<div class='patient-info-form'>", unsafe_allow_html=True)
-    st.markdown("<h4>Patient Information</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 class='section-header'>Patient Information</h4>", unsafe_allow_html=True)
     
     patient_name = st.text_input("Patient Name", placeholder="Enter patient's full name")
     patient_id = st.text_input("Patient ID", placeholder="Enter patient's ID number")
-    indications = st.text_area("Clinical Indications", placeholder="Enter relevant clinical information")
+    patient_age = st.number_input("Age", min_value=0, max_value=120, step=1)
+    patient_sex = st.selectbox("Sex", ["Male", "Female", "Other"])
     
+    # Store patient info in session state
     st.session_state.patient_info = {
         'name': patient_name,
         'id': patient_id,
-        'indications': indications
+        'age': patient_age,
+        'sex': patient_sex
     }
     
     st.markdown("</div>", unsafe_allow_html=True)
@@ -673,14 +864,14 @@ with col2:
         # Display the uploaded image in a nice frame
         st.markdown("<div class='uploadedFile'>", unsafe_allow_html=True)
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Medical Image", use_container_width =True)
+        st.image(image, caption="Uploaded Medical Image", use_column_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
         
         # Store image bytes in session state
         st.session_state.image_bytes = uploaded_file.getvalue()
         
         # Analysis button
-        if api_key and st.session_state.patient_info['name'] and st.session_state.patient_info['id']:
+        if st.session_state.patient_info['name'] and st.session_state.patient_info['id']:
             if st.button("Generate Report", key="generate_btn"):
                 with st.spinner("Analyzing image..."):
                     try:
@@ -688,7 +879,7 @@ with col2:
                         image_base64 = base64.b64encode(st.session_state.image_bytes).decode()
                         
                         # Prepare the request
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
                         
                         headers = {
                             "Content-Type": "application/json"
@@ -727,8 +918,8 @@ with col2:
                         
                         # Display the report in a nice format
                         st.markdown("<div class='report-card'>", unsafe_allow_html=True)
-                        st.markdown(f"<h3>📋 Medical Analysis Report ({selected_language})</h3>", unsafe_allow_html=True)
-                        st.markdown("<hr style='margin-bottom: 20px;'>", unsafe_allow_html=True)
+                        st.markdown(f"<h3 style='color: #1e3a8a;'>📋 Medical Analysis Report ({selected_language})</h3>", unsafe_allow_html=True)
+                        st.markdown("<hr style='border-color: #e2e8f0; margin: 1rem 0;'>", unsafe_allow_html=True)
                         st.markdown(analysis)
                         st.markdown("</div>", unsafe_allow_html=True)
                         
@@ -741,7 +932,7 @@ with col2:
                             </div>
                         """, unsafe_allow_html=True)
         elif uploaded_file is not None:
-            if not api_key:
+            if not API_KEY:
                 st.warning("Please enter your Google AI Studio API key to proceed with the analysis.")
             if not st.session_state.patient_info['name'] or not st.session_state.patient_info['id']:
                 st.warning("Please complete the patient information form to proceed with the analysis.")
@@ -822,12 +1013,23 @@ with col2:
 st.markdown("""
     <div class='footer'>
         <div style='display: flex; justify-content: center; margin-bottom: 15px;'>
-            <div style='margin: 0 15px;'>Terms of Service</div>
-            <div style='margin: 0 15px;'>Privacy Policy</div>
-            <div style='margin: 0 15px;'>FAQs</div>
-            <div style='margin: 0 15px;'>Contact</div>
+            <div style='margin: 0 15px; color: #4b5563;'>Terms of Service</div>
+            <div style='margin: 0 15px; color: #4b5563;'>Privacy Policy</div>
+            <div style='margin: 0 15px; color: #4b5563;'>FAQs</div>
+            <div style='margin: 0 15px; color: #4b5563;'>Contact</div>
         </div>
-        <p>© 2025 Medical Report Generator. Built with ❤️ using Streamlit and Google's Gemini AI</p>
-        <p style='font-size: 12px; color: #adb5bd; margin-top: 10px;'>This tool is intended for informational purposes only and should not replace professional medical advice.</p>
+        <p style='color: #4b5563;'>© 2025 Medical Report Generator. Professional medical imaging analysis platform</p>
+        <p style='font-size: 12px; color: #6b7280; margin-top: 10px;'>This tool is intended for informational purposes only and should not replace professional medical advice.</p>
     </div>
 """, unsafe_allow_html=True)
+
+# Handle Google Sign-In response
+if 'google_token' in st.session_state or st.experimental_get_query_params().get('google_token'):
+    st.write("Processing Google Sign-In...")
+    token = st.session_state.get('google_token') or st.experimental_get_query_params().get('google_token')[0]
+    if handle_google_signin(token):
+        st.success("Successfully signed in with Google!")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.error("Failed to process Google Sign-In. Please try again.")
