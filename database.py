@@ -105,7 +105,10 @@
 import mysql.connector
 import hashlib
 import uuid
+import bcrypt
+import secrets
 from mysql.connector import Error
+from datetime import datetime, timedelta
 
 def get_db_connection():
     try:
@@ -119,13 +122,18 @@ def get_db_connection():
         # Create tables if they don't exist
         cursor = conn.cursor(dictionary=True)
         
-        # Users table
+        # Users table with new fields
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             username VARCHAR(255) NOT NULL UNIQUE,
             email VARCHAR(255) NOT NULL UNIQUE,
             password_hash VARCHAR(255) NOT NULL,
+            email_verified BOOLEAN DEFAULT FALSE,
+            verification_token VARCHAR(255),
+            verification_token_expires DATETIME,
+            reset_token VARCHAR(255),
+            reset_token_expires DATETIME,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
@@ -180,12 +188,18 @@ def create_user(username, password, email):
             conn.close()
             return False
         
-        # Hash the password
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        # Generate verification token
+        verification_token = secrets.token_urlsafe(32)
+        verification_expires = datetime.utcnow() + timedelta(hours=24)
+        
+        # Hash the password using bcrypt
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         
         # Insert the new user
-        cursor.execute('INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)',
-                     (username, email, password_hash))
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, verification_token, verification_token_expires)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (username, email, password_hash, verification_token, verification_expires))
         
         # Get the user id
         user_id = cursor.lastrowid
@@ -210,13 +224,21 @@ def verify_user_by_email(email, password):
             
         cursor = conn.cursor(dictionary=True)
         
-        # Hash the provided password
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        
-        # Check credentials
-        cursor.execute('SELECT * FROM users WHERE email = %s AND password_hash = %s', (email, password_hash))
+        # Get user by email
+        cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
         user = cursor.fetchone()
         
+        if not user:
+            cursor.close()
+            conn.close()
+            return None
+            
+        # Verify password using bcrypt
+        if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            cursor.close()
+            conn.close()
+            return None
+            
         cursor.close()
         conn.close()
         return user
@@ -224,6 +246,127 @@ def verify_user_by_email(email, password):
     except Error as e:
         print(f"Error verifying user: {e}")
         return None
+
+def verify_email(token):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+            
+        cursor = conn.cursor(dictionary=True)
+        
+        # Find user with matching token
+        cursor.execute('''
+            SELECT * FROM users 
+            WHERE verification_token = %s 
+            AND verification_token_expires > %s
+        ''', (token, datetime.utcnow()))
+        
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            conn.close()
+            return False
+            
+        # Update user as verified
+        cursor.execute('''
+            UPDATE users 
+            SET email_verified = TRUE,
+                verification_token = NULL,
+                verification_token_expires = NULL
+            WHERE id = %s
+        ''', (user['id'],))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+        
+    except Error as e:
+        print(f"Error verifying email: {e}")
+        return False
+
+def request_password_reset(email):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+            
+        cursor = conn.cursor(dictionary=True)
+        
+        # Check if user exists
+        cursor.execute('SELECT * FROM users WHERE email = %s', (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            conn.close()
+            return False
+            
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        reset_expires = datetime.utcnow() + timedelta(hours=1)
+        
+        # Update user with reset token
+        cursor.execute('''
+            UPDATE users 
+            SET reset_token = %s,
+                reset_token_expires = %s
+            WHERE id = %s
+        ''', (reset_token, reset_expires, user['id']))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return reset_token
+        
+    except Error as e:
+        print(f"Error requesting password reset: {e}")
+        return False
+
+def reset_password(token, new_password):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+            
+        cursor = conn.cursor(dictionary=True)
+        
+        # Find user with matching token
+        cursor.execute('''
+            SELECT * FROM users 
+            WHERE reset_token = %s 
+            AND reset_token_expires > %s
+        ''', (token, datetime.utcnow()))
+        
+        user = cursor.fetchone()
+        
+        if not user:
+            cursor.close()
+            conn.close()
+            return False
+            
+        # Hash new password
+        password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+        
+        # Update password and clear reset token
+        cursor.execute('''
+            UPDATE users 
+            SET password_hash = %s,
+                reset_token = NULL,
+                reset_token_expires = NULL
+            WHERE id = %s
+        ''', (password_hash, user['id']))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+        
+    except Error as e:
+        print(f"Error resetting password: {e}")
+        return False
 
 def get_user_profile(email):
     try:

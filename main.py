@@ -838,12 +838,25 @@ with tabs[1]:
                             st.markdown("<hr style='margin-bottom: 20px;'>", unsafe_allow_html=True)
                             
                             # Add patient info to displayed report
-                            st.markdown(f"**Patient:** {patient_name}", unsafe_allow_html=True)
-                            st.markdown(f"**Patient ID:** {patient_id_value}", unsafe_allow_html=True)
-                            st.markdown(f"**Indications:** {indications}", unsafe_allow_html=True)
+                            st.markdown(f"<p><strong>Patient:</strong> {patient_name}</p>", unsafe_allow_html=True)
+                            st.markdown(f"<p><strong>Patient ID:</strong> {patient_id_value}</p>", unsafe_allow_html=True)
+                            st.markdown(f"<p><strong>Indications:</strong> {indications}</p>", unsafe_allow_html=True)
                             st.markdown("<hr style='margin-bottom: 20px;'>", unsafe_allow_html=True)
                             
-                            st.markdown(analysis)
+                            # Format the analysis into a single coherent block
+                            formatted_analysis = analysis.replace('**', '')  # Remove asterisks
+                            formatted_analysis = formatted_analysis.replace('📝 Medical Analysis', '')  # Remove repeated headers
+                            formatted_analysis = formatted_analysis.replace('📊 Analysis Accuracy', '')  # Remove repeated headers
+                            formatted_analysis = formatted_analysis.replace('💊 Recommended Medications', '')  # Remove repeated headers
+                            formatted_analysis = formatted_analysis.replace('⚠️ Severity Assessment', '')  # Remove repeated headers
+                            
+                            # Display analysis in a clean, continuous format
+                            st.markdown(f"""
+                                <div style='font-family: Arial, sans-serif; line-height: 1.6; font-size: 16px; color: #333;'>
+                                    {formatted_analysis}
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
                             st.markdown("</div>", unsafe_allow_html=True)
                             
                             # Add download options for the report with better styling
